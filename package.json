@@ -1,0 +1,11 @@
+{
+  "name": "devhost-plugin-session-stop",
+  "version": "1.0.0",
+  "description": "devhost plugin: Stop the local process of a Remote Control session to free its memory",
+  "type": "module",
+  "main": "index.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test test/*.test.js" }
+}
