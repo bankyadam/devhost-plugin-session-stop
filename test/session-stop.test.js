@@ -43,3 +43,12 @@ test('SIGKILL when it does not end; nothing when there is no such process; a dry
   assert.equal(dry.calls.some((l) => l.startsWith('kill -')), false);
   assert.deepEqual(parsePs('  12   1 2048 /bin/zsh -l\nbad line\n'), [{ pid: 12, ppid: 1, rssKb: 2048, command: '/bin/zsh -l' }]);
 });
+
+test('a zombie counts as stopped, and a reused pid is never SIGKILLed', async () => {
+  const zombie = setup(' 200 100 1024 /usr/local/bin/claude --print\n', { killWorks: false });
+  zombie.ctx.exec.query = ((q) => async (c, a, o) => (c === 'ps' && a[0] === '-o' ? { code: 0, stdout: 'Z\n', stderr: '' } : q(c, a, o)))(zombie.ctx.exec.query);
+  const r = await stop.run(zombie.ctx, { session });
+  assert.doesNotMatch(r.summary, /SIGKILL/);
+  assert.equal(zombie.calls.some((l) => l.startsWith('kill -KILL')), false);
+  assert.deepEqual(zombie.waits[0], { attempts: 10, delayMs: 500 });
+});

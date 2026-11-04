@@ -7,6 +7,8 @@
  * whose working directory is the session's; never the Claude app's sessions or anything else.
  * On claude.ai the session stays in the list; a new message there may start it again.
  */
+import { readFileSync } from 'node:fs';
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 export function parsePs(out) {
     return out.split('\n').flatMap((line) => {
         const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(line);
@@ -34,10 +36,16 @@ export async function sessionProcesses(ctx, s) {
     }
     return out;
 }
+/** Gone: no such process, or a zombie its parent has not reaped yet (kill -0 still succeeds for those). */
+async function isGone(ctx, pid) {
+    if ((await ctx.exec.query('kill', ['-0', String(pid)])).code !== 0)
+        return true;
+    return (await ctx.exec.query('ps', ['-o', 'stat=', '-p', String(pid)])).stdout.trim().startsWith('Z');
+}
 const mb = (kb) => `${Math.round(kb / 1024)} MB`;
 export const sessionStop = {
     name: 'session-stop',
-    version: '1.0.0',
+    version: pkg.version,
     description: 'Stop the local process of a Remote Control session to free its memory',
     actions: [
         {
@@ -60,11 +68,14 @@ export const sessionStop = {
                     return { summary: `would stop session ${s.id.slice(0, 8)} (pid ${p.pid}, ${mb(p.rssKb)})`, data: { stopped: [] } };
                 }
                 await ctx.exec.exec('kill', ['-TERM', String(p.pid)]);
-                const gone = await ctx.exec.waitFor(async () => (await ctx.exec.query('kill', ['-0', String(p.pid)])).code !== 0, 10, 500);
-                if (!gone) {
+                const gone = await ctx.exec.waitFor(() => isGone(ctx, p.pid), 10, 500);
+                let killed = false;
+                // Only SIGKILL what is still the session's own process: the pid may have ended and been reused meanwhile.
+                if (!gone && (await sessionProcesses(ctx, s)).some((x) => x.pid === p.pid)) {
                     await ctx.exec.exec('kill', ['-KILL', String(p.pid)]);
+                    killed = true;
                 }
-                return { summary: `stopped session ${s.id.slice(0, 8)} (pid ${p.pid}, ${mb(p.rssKb)} freed)${gone ? '' : ' with SIGKILL after 5 s'}`, data: { stopped: [p.pid], rssBytes: p.rssKb * 1024 } };
+                return { summary: `stopped session ${s.id.slice(0, 8)} (pid ${p.pid}, ${mb(p.rssKb)} freed)${killed ? ' with SIGKILL after 5 s' : ''}`, data: { stopped: [p.pid], rssBytes: p.rssKb * 1024 } };
             },
         },
     ],

@@ -2,7 +2,7 @@
 
 A [devhost](https://github.com/bankyadam/devhost.app) plugin that frees memory by stopping the local `claude` process of a Remote Control session (a few hundred MB each).
 
-It only stops a process that a devhost Remote Control service started (its child) and whose working directory is the session's: never the Claude app's sessions or anything else. SIGTERM, then SIGKILL after 5 s. The session stays in claude.ai's list; a new message there may start it again. With `spawn: same-dir`, several sessions share a directory: it refuses and says to stop the environment's service instead.
+It only stops a process that a devhost Remote Control service started (its child) and whose working directory is the session's: never the Claude app's sessions or anything else. SIGTERM, then SIGKILL after 5 s (only if that process is still the session's own). The session stays in claude.ai's list; a new message there may start it again. With `spawn: same-dir`, several sessions share a directory: it refuses and says to stop the environment's service instead.
 
 ## Install
 
